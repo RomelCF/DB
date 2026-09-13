@@ -11,6 +11,7 @@ WORKDIR /app
 FROM base AS build
 ARG NEXT_PUBLIC_API_URL=http://localhost:3001
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV NEXT_OUTPUT_STANDALONE=true
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY frontend/package.json ./frontend/
 RUN pnpm install --frozen-lockfile --filter frontend
