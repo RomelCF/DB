@@ -204,6 +204,10 @@ pnpm build      # compila backend y frontend
 pnpm test       # tests del backend
 ```
 
+### 5.5. Deploy en producción
+
+Para desplegar en **Vercel + Render + Supabase** (incluido el seed automatizado con GitHub Actions), ver [`DEPLOY.md`](../DEPLOY.md).
+
 ---
 
 ## Deuda técnica / pendiente (próxima iteración)
