@@ -59,7 +59,6 @@ import { BuqueTripulanteController } from './controllers/buque-tripulante.contro
 import { OperacionMaritimaController } from './controllers/operacion-maritima.controller';
 import { TipoIncidenciaController } from './controllers/tipo-incidencia.controller';
 import { IncidenciasController } from './controllers/incidencias.controller';
-import { AuthMaritimoController } from './controllers/auth-maritimo.controller';
 import { OperacionesIncidenciasController } from './controllers/operaciones-incidencias.controller';
 import { HallazgosController } from './controllers/hallazgos.controller';
 import { ConciliacionController } from './controllers/conciliacion.controller';
@@ -77,7 +76,6 @@ import { BuqueTripulanteService } from './services/buque-tripulante.service';
 import { OperacionMaritimaService } from './services/operacion-maritima.service';
 import { TipoIncidenciaService } from './services/tipo-incidencia.service';
 import { IncidenciasService } from './services/incidencias.service';
-import { AuthMaritimoService } from './services/auth-maritimo.service';
 import { OperacionesIncidenciasService } from './services/operaciones-incidencias.service';
 import { HallazgosService } from './services/hallazgos.service';
 import { ConciliacionService } from './services/conciliacion.service';
@@ -140,7 +138,6 @@ import { ConciliacionService } from './services/conciliacion.service';
     OperacionMaritimaController,
     TipoIncidenciaController,
     IncidenciasController,
-    AuthMaritimoController,
     OperacionesIncidenciasController,
     HallazgosController,
     ConciliacionController,
@@ -159,7 +156,6 @@ import { ConciliacionService } from './services/conciliacion.service';
     OperacionMaritimaService,
     TipoIncidenciaService,
     IncidenciasService,
-    AuthMaritimoService,
     OperacionesIncidenciasService,
     HallazgosService,
     ConciliacionService,

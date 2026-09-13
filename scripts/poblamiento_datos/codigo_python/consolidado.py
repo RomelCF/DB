@@ -813,17 +813,24 @@ class GeneradorCSVConsolidado:
         self.ids['usuario'] = []
         correos_usados = set()
         
-        for id_empleado in self.ids['empleado']:
+        for idx, id_empleado in enumerate(self.ids['empleado']):
             id_usuario = str(uuid.uuid4())
             
-            while True:
-                correo = fake.email()
-                if correo not in correos_usados:
-                    correos_usados.add(correo)
-                    break
-            
-            contrasena = fake.password(length=12)
-            id_rol = random.choice(self.ids['rol_usuario'])
+            if idx == 0:
+                # Usuario demo: Administrador + Operador -> acceso a todos los módulos
+                correo = 'admin@demo.com'
+                contrasena = 'Admin123!'
+                id_rol = self.ids['rol_usuario'][0]  # Administrador
+                correos_usados.add(correo)
+            else:
+                while True:
+                    correo = fake.email()
+                    if correo not in correos_usados:
+                        correos_usados.add(correo)
+                        break
+                
+                contrasena = fake.password(length=12)
+                id_rol = random.choice(self.ids['rol_usuario'])
             
             self.ids['usuario'].append(id_usuario)
             datos.append([
@@ -2958,6 +2965,9 @@ class GeneradorCSVConsolidado:
             empleados_disponibles, 
             min(20, len(empleados_disponibles))
         )
+        # Garantizar que el empleado del usuario demo sea operador (acceso a monitoreo)
+        if self.ids['empleado'][0] not in empleados_operadores:
+            empleados_operadores.insert(0, self.ids['empleado'][0])
         
         for id_empleado in empleados_operadores:
             id_operador = str(uuid.uuid4())

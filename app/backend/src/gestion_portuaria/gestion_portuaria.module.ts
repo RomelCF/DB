@@ -11,8 +11,6 @@ import { Puerto } from '../gestion_maritima/entities/puerto.entity';
 import { Muelle } from '../gestion_maritima/entities/muelle.entity';
 import { OperacionPortuaria } from '../gestion_maritima/entities/operacion-portuaria.entity';
 import { TipoOperacionPortuaria } from '../shared/entities/tipo-operacion-portuaria.entity';
-import { AuthPortuarioController } from './controllers/auth-portuario.controller';
-import { AuthPortuarioService } from './services/auth-portuario.service';
 import { OperacionesPortuariasController } from './controllers/operaciones-portuarias.controller';
 import { OperacionesPortuariasService } from './services/operaciones-portuarias.service';
 
@@ -32,7 +30,7 @@ import { OperacionesPortuariasService } from './services/operaciones-portuarias.
       TipoOperacionPortuaria, // desde shared
     ]),
   ],
-  controllers: [AuthPortuarioController, OperacionesPortuariasController],
-  providers: [AuthPortuarioService, OperacionesPortuariasService],
+  controllers: [OperacionesPortuariasController],
+  providers: [OperacionesPortuariasService],
 })
 export class GestionPortuariaModule {}

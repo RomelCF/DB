@@ -179,6 +179,14 @@ La base de datos se inicializa automáticamente con el **esquema** (`scripts/ddl
 - Destino: usa `DATABASE_URL` si está definida; si no, carga en el contenedor `db` del docker-compose (red `app_default`).
 - Requisito: `python3` con `venv` y Docker (o psql local).
 
+**Credenciales de prueba** (texto plano, modo desarrollo):
+
+| Usuario | Contraseña | Acceso |
+|---|---|---|
+| `admin@demo.com` | `Admin123!` | Todos los módulos (Administrador + Operador) |
+
+Los demás usuarios generados tienen contraseñas aleatorias legibles en `shared.Usuario`. El login es unificado (`POST /auth/login`) y el acceso a cada módulo se calcula por rol: **monitoreo** (ser operador), **reservas** (rol Admin/Supervisor/Operador/Coordinador/Consultor/Auditor), **marítimo** (no Agente/Cliente/Trabajador Portuario), **portuario** (no Agente/Cliente).
+
 Comandos útiles:
 
 ```bash
@@ -200,4 +208,4 @@ pnpm test       # tests del backend
 
 ## Deuda técnica / pendiente (próxima iteración)
 
-- **Frontend - badges de estado**: las pantallas de operaciones marítimas muestran el estado con un `Record` cuyas claves son `"En curso"`/`"Completado"`, pero la BD devuelve `"En Curso"`/`"Completada"` → el badge cae en gris "Desconocido". Ajustar el mapeo (`app/operaciones-maritimas/incidencias/page.tsx` → `statusBadgeStyles`).
+- **Contraseñas en texto plano**: el login y el seed usan contraseñas en texto plano (modo desarrollo). Migrar a `bcrypt` (hash en `generar_usuarios` + `bcrypt.compare` en `AuthService`) antes de producción.
