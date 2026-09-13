@@ -165,17 +165,29 @@ docker compose up -d --build
 - Backend: `http://localhost:3001`
 - PostgreSQL: solo accesible desde la red interna (`db:5432`)
 
-La base de datos se inicializa automáticamente con el **esquema** (`scripts/ddl/tablas/consolidado.sql`).
+La base de datos se inicializa automáticamente con el **esquema** (`scripts/ddl/tablas/consolidado.sql`), que incluye los 8 schemas: `shared`, los 6 módulos y `gestion_maritima_audit` (auditoría batch de conciliación).
 
-> ⚠️ **Datos de prueba**: los scripts DML del repositorio (`scripts/dml/`) fueron escritos para un esquema con IDs enteros y **no son compatibles** con el DDL actual (UUID). Por eso solo se carga el esquema. Para poblar datos, ajustar los scripts DML al esquema UUID o apuntar `DATABASE_URL` a una base ya poblada (p. ej. Supabase).
+**Datos de prueba (seed automatizado):**
+
+```bash
+./scripts/poblamiento_datos/seed.sh          # genera CSVs (Python+Faker) y los carga con psql \copy
+./scripts/poblamiento_datos/seed.sh --ddl    # igual, pero primero recrea el esquema (DESTRUCTIVO)
+```
+
+- El generador `consolidado.py` produce 123 CSVs con **UUIDs** (compatible con el DDL) y fechas relativas a la fecha actual.
+- El loader `consolidado.sql` usa `\copy` (cliente) y el placeholder `:csvdir`, que `seed.sh` resuelve automáticamente.
+- Destino: usa `DATABASE_URL` si está definida; si no, carga en el contenedor `db` del docker-compose (red `app_default`).
+- Requisito: `python3` con `venv` y Docker (o psql local).
 
 Comandos útiles:
 
 ```bash
 docker compose logs -f backend   # logs del backend
 docker compose down              # detener servicios
-docker compose down -v           # detener y borrar datos de la BD
+docker compose down -v           # detener y borrar datos de la BD (se vuelve a sembrar con seed.sh)
 ```
+
+> ⚠️ Los scripts antiguos `scripts/dml/datos-iniciales/` usan IDs enteros y son **incompatibles** con el esquema UUID actual. Usar el pipeline `consolidado.py` + `consolidado.sql` + `seed.sh`.
 
 ### 5.4. Build de producción
 
@@ -183,3 +195,9 @@ docker compose down -v           # detener y borrar datos de la BD
 pnpm build      # compila backend y frontend
 pnpm test       # tests del backend
 ```
+
+---
+
+## Deuda técnica / pendiente (próxima iteración)
+
+- **Frontend - badges de estado**: las pantallas de operaciones marítimas muestran el estado con un `Record` cuyas claves son `"En curso"`/`"Completado"`, pero la BD devuelve `"En Curso"`/`"Completada"` → el badge cae en gris "Desconocido". Ajustar el mapeo (`app/operaciones-maritimas/incidencias/page.tsx` → `statusBadgeStyles`).

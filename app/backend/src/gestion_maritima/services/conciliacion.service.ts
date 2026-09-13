@@ -111,8 +111,8 @@ export class ConciliacionService {
       const kpis = await this.dataSource.query(`
         SELECT
           COUNT(DISTINCT o.id_operacion) as total_operaciones,
-          COUNT(DISTINCT CASE WHEN eo.nombre = 'EN_CURSO' THEN o.id_operacion END) as operaciones_activas,
-          COUNT(DISTINCT CASE WHEN eo.nombre = 'FINALIZADA' THEN o.id_operacion END) as operaciones_finalizadas,
+          COUNT(DISTINCT CASE WHEN eo.nombre = 'En Curso' THEN o.id_operacion END) as operaciones_activas,
+          COUNT(DISTINCT CASE WHEN eo.nombre = 'Completada' THEN o.id_operacion END) as operaciones_finalizadas,
           COUNT(DISTINCT i.id_incidencia) as total_incidencias,
           COUNT(DISTINCT CASE WHEN i.grado_severidad >= 4 THEN i.id_incidencia END) as incidencias_criticas
         FROM shared.Operacion o

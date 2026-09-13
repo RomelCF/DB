@@ -240,6 +240,12 @@ CREATE TABLE shared.TipoNotificacion (
     nombre VARCHAR(50) NOT NULL UNIQUE
 );
 
+CREATE TABLE shared.EstadoLectura (
+    id_estado_lectura UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    nombre VARCHAR(50) NOT NULL UNIQUE,
+    CONSTRAINT chk_estado_lectura_nombre CHECK (LENGTH(TRIM(nombre)) > 0)
+);
+
 -- ============================================
 -- TABLAS PRINCIPALES - SCHEMA SHARED
 -- ============================================
@@ -1459,6 +1465,25 @@ CREATE TABLE monitoreo.Sensor (
         ON UPDATE CASCADE
 );
 
+CREATE TABLE monitoreo.LecturaSensor (
+    id_lectura_sensor UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id_sensor UUID NOT NULL,
+    fecha_hora TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    valor DECIMAL(10,2) NOT NULL,
+    unidad VARCHAR(10) NOT NULL,
+    id_estado_lectura UUID NOT NULL,
+    CONSTRAINT fk_lectura_sensor FOREIGN KEY (id_sensor) 
+        REFERENCES monitoreo.Sensor(id_sensor)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE,
+    CONSTRAINT fk_lectura_estado FOREIGN KEY (id_estado_lectura) 
+        REFERENCES shared.EstadoLectura(id_estado_lectura)
+        ON DELETE RESTRICT
+        ON UPDATE CASCADE
+);
+
+CREATE INDEX idx_lectura_sensor_fecha ON monitoreo.LecturaSensor(id_sensor, fecha_hora);
+
 CREATE TABLE monitoreo.Reporte (
     id_reporte UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     codigo VARCHAR(20) NOT NULL UNIQUE,
@@ -1982,6 +2007,301 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- ============================================================
+-- SCHEMA: gestion_maritima_audit (Proceso batch conciliación)
+-- Documentación: docs 11.1.3 (esquema) y 11.2.3 (función)
+-- ============================================================
+
+DROP SCHEMA IF EXISTS gestion_maritima_audit CASCADE;
+CREATE SCHEMA gestion_maritima_audit;
+
+-- Dimensión de fechas
+CREATE TABLE gestion_maritima_audit.DimFecha (
+    id_fecha SERIAL PRIMARY KEY,
+    fecha DATE NOT NULL UNIQUE,
+    anio INT NOT NULL,
+    mes INT NOT NULL,
+    dia INT NOT NULL,
+    nombre_mes VARCHAR(20),
+    nombre_dia VARCHAR(20)
+);
+
+-- Dimensión de estados de operación
+CREATE TABLE gestion_maritima_audit.DimEstadoOperacion (
+    id_estado_operacion UUID PRIMARY KEY,
+    nombre VARCHAR(50) NOT NULL
+);
+
+-- Dimensión de buques
+CREATE TABLE gestion_maritima_audit.DimBuque (
+    id_buque UUID PRIMARY KEY,
+    matricula VARCHAR(20) NOT NULL,
+    nombre VARCHAR(100) NOT NULL,
+    capacidad INT NOT NULL,
+    peso DECIMAL(15,2) NOT NULL
+);
+
+-- Dimensión de tipos de operación
+CREATE TABLE gestion_maritima_audit.DimTipoOperacion (
+    id_tipo_operacion UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    nombre VARCHAR(50) NOT NULL,
+    descripcion VARCHAR(255)
+);
+
+-- Dimensión de tipos de corrección
+CREATE TABLE gestion_maritima_audit.DimTipoCorreccion (
+    id_tipo_correccion UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    nombre VARCHAR(50) NOT NULL,
+    descripcion VARCHAR(255)
+);
+
+-- Dimensión de inconsistencias
+CREATE TABLE gestion_maritima_audit.DimInconsistencia (
+    id_inconsistencia UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tipo_inconsistencia VARCHAR(50) NOT NULL,
+    nivel_severidad INT NOT NULL,
+    descripcion VARCHAR(255),
+    CONSTRAINT chk_dim_inconsistencia_severidad CHECK (nivel_severidad BETWEEN 1 AND 4)
+);
+
+-- Tabla de hechos: conciliación de operaciones
+CREATE TABLE gestion_maritima_audit.FactConciliacionOperacion (
+    id_fact UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id_operacion UUID NOT NULL,
+    id_fecha_corte INT NOT NULL,
+    id_estado_operacion_anterior UUID NOT NULL,
+    id_estado_operacion_nuevo UUID NOT NULL,
+    id_buque UUID,
+    tipo_operacion VARCHAR(20) NOT NULL,
+    tipo_correccion VARCHAR(50) NOT NULL,
+    porcentaje_trayecto_anterior DECIMAL(5,2),
+    porcentaje_trayecto_nuevo DECIMAL(5,2),
+    fecha_inicio_operacion TIMESTAMP NOT NULL,
+    fecha_fin_original TIMESTAMP,
+    fecha_fin_corregida TIMESTAMP,
+    duracion_real_horas DECIMAL(10,2),
+    incidencias_asociadas INT DEFAULT 0,
+    incidencias_alta_severidad INT DEFAULT 0,
+    inconsistencias_detectadas INT DEFAULT 0,
+    requiere_intervencion_manual BOOLEAN DEFAULT FALSE,
+    correccion_aplicada BOOLEAN DEFAULT TRUE,
+    descripcion_correccion TEXT,
+    fecha_registro_batch TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    
+    CONSTRAINT fk_fact_conc_fecha FOREIGN KEY (id_fecha_corte)
+        REFERENCES gestion_maritima_audit.DimFecha(id_fecha),
+    CONSTRAINT fk_fact_conc_estado_ant FOREIGN KEY (id_estado_operacion_anterior)
+        REFERENCES gestion_maritima_audit.DimEstadoOperacion(id_estado_operacion),
+    CONSTRAINT fk_fact_conc_estado_new FOREIGN KEY (id_estado_operacion_nuevo)
+        REFERENCES gestion_maritima_audit.DimEstadoOperacion(id_estado_operacion),
+    CONSTRAINT fk_fact_conc_buque FOREIGN KEY (id_buque)
+        REFERENCES gestion_maritima_audit.DimBuque(id_buque),
+    CONSTRAINT chk_fact_conc_tipo_operacion CHECK (tipo_operacion IN ('MARITIMA', 'PORTUARIA')),
+    CONSTRAINT chk_fact_conc_tipo_correccion CHECK (tipo_correccion IN (
+        'CIERRE_AUTOMATICO', 
+        'ACTUALIZACION_ESTADO', 
+        'SINCRONIZACION',
+        'CORRECCION_PORCENTAJE'
+    ))
+);
+
+-- Tabla de hechos: inconsistencias detectadas en operaciones
+CREATE TABLE gestion_maritima_audit.FactInconsistenciaOperacion (
+    id_fact_inconsistencia UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id_operacion UUID NOT NULL,
+    id_fecha_corte INT NOT NULL,
+    id_inconsistencia UUID NOT NULL,
+    id_tipo_correccion UUID,
+    resuelta BOOLEAN NOT NULL DEFAULT FALSE,
+    fecha_deteccion TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_resolucion TIMESTAMP,
+    usuario_resolucion VARCHAR(100),
+    observaciones TEXT,
+    
+    CONSTRAINT fk_fact_incons_fecha FOREIGN KEY (id_fecha_corte)
+        REFERENCES gestion_maritima_audit.DimFecha(id_fecha),
+    CONSTRAINT fk_fact_incons_inconsistencia FOREIGN KEY (id_inconsistencia)
+        REFERENCES gestion_maritima_audit.DimInconsistencia(id_inconsistencia),
+    CONSTRAINT fk_fact_incons_tipo_correccion FOREIGN KEY (id_tipo_correccion)
+        REFERENCES gestion_maritima_audit.DimTipoCorreccion(id_tipo_correccion)
+);
+
+-- Índices
+CREATE INDEX idx_fact_conc_operacion ON gestion_maritima_audit.FactConciliacionOperacion(id_operacion);
+CREATE INDEX idx_fact_conc_fecha ON gestion_maritima_audit.FactConciliacionOperacion(id_fecha_corte);
+CREATE INDEX idx_fact_conc_buque ON gestion_maritima_audit.FactConciliacionOperacion(id_buque);
+CREATE INDEX idx_fact_conc_tipo_operacion ON gestion_maritima_audit.FactConciliacionOperacion(tipo_operacion);
+CREATE INDEX idx_fact_conc_intervencion ON gestion_maritima_audit.FactConciliacionOperacion(requiere_intervencion_manual);
+
+CREATE INDEX idx_fact_incons_operacion ON gestion_maritima_audit.FactInconsistenciaOperacion(id_operacion);
+CREATE INDEX idx_fact_incons_fecha ON gestion_maritima_audit.FactInconsistenciaOperacion(id_fecha_corte);
+CREATE INDEX idx_fact_incons_resuelta ON gestion_maritima_audit.FactInconsistenciaOperacion(resuelta);
+CREATE INDEX idx_fact_incons_inconsistencia ON gestion_maritima_audit.FactInconsistenciaOperacion(id_inconsistencia);
+
+-- ============================================================
+-- FUNCIÓN BATCH: conciliación nocturna de operaciones marítimas
+-- Adaptada de la documentación (11.2.3): las tablas operacionales
+-- viven en el schema "shared" y los estados finales son los del seed
+-- ('Completada' / 'En Curso').
+-- ============================================================
+
+CREATE OR REPLACE FUNCTION gestion_maritima_audit.f_conciliacion_nocturna_operaciones(p_fecha_corte DATE)
+RETURNS void AS
+$$
+DECLARE
+    cur_op CURSOR FOR
+        SELECT o.id_operacion,
+               o.codigo,
+               o.fecha_inicio,
+               o.fecha_fin,
+               o.id_estado_operacion
+        FROM shared.Operacion o
+        WHERE (o.fecha_fin IS NULL AND (NOW() - o.fecha_inicio) > INTERVAL '48 hours')
+           OR DATE(o.fecha_fin) = p_fecha_corte;
+
+    v_op RECORD;
+    v_id_fecha INT;
+    v_id_tipo_operacion UUID;
+    v_id_buque UUID;
+    v_porcentaje_anterior DECIMAL(5,2);
+    v_porcentaje_nuevo DECIMAL(5,2);
+    v_id_estado_anterior UUID;
+    v_id_estado_nuevo UUID;
+    v_fecha_fin_corregida TIMESTAMP;
+    v_duracion_horas DECIMAL(10,2);
+    v_incidencias_total INT;
+    v_incidencias_alta INT;
+    v_correccion_aplicada BOOLEAN;
+    v_descripcion_correccion TEXT;
+    v_id_tipo_correccion UUID;
+    v_tipo_operacion VARCHAR(20);
+    v_tipo_correccion VARCHAR(50);
+BEGIN
+    -- Asegurar registro en DimFecha
+    SELECT id_fecha INTO v_id_fecha
+    FROM gestion_maritima_audit.DimFecha
+    WHERE fecha = p_fecha_corte;
+
+    IF NOT FOUND THEN
+        INSERT INTO gestion_maritima_audit.DimFecha(fecha, anio, mes, dia, nombre_mes, nombre_dia)
+        VALUES (
+            p_fecha_corte,
+            EXTRACT(YEAR FROM p_fecha_corte),
+            EXTRACT(MONTH FROM p_fecha_corte),
+            EXTRACT(DAY FROM p_fecha_corte),
+            TO_CHAR(p_fecha_corte, 'TMMonth'),
+            TO_CHAR(p_fecha_corte, 'TMDay')
+        )
+        RETURNING id_fecha INTO v_id_fecha;
+    END IF;
+
+    -- Poblar dimensiones desde tablas operacionales
+    INSERT INTO gestion_maritima_audit.DimEstadoOperacion (id_estado_operacion, nombre)
+    SELECT eo.id_estado_operacion, eo.nombre
+    FROM shared.EstadoOperacion eo
+    ON CONFLICT (id_estado_operacion) DO NOTHING;
+
+    INSERT INTO gestion_maritima_audit.DimBuque (id_buque, matricula, nombre, capacidad, peso)
+    SELECT b.id_buque, b.matricula, b.nombre, b.capacidad, b.peso
+    FROM shared.Buque b
+    ON CONFLICT (id_buque) DO NOTHING;
+
+    OPEN cur_op;
+
+    LOOP
+        FETCH cur_op INTO v_op;
+        EXIT WHEN NOT FOUND;
+
+        -- Inicializar variables
+        v_id_buque := NULL;
+        v_porcentaje_anterior := NULL;
+        v_id_estado_anterior := v_op.id_estado_operacion;
+        v_id_estado_nuevo := v_op.id_estado_operacion;
+        v_fecha_fin_corregida := v_op.fecha_fin;
+        v_correccion_aplicada := FALSE;
+        v_descripcion_correccion := '';
+        -- El batch concilia operaciones del módulo marítimo
+        v_tipo_operacion := 'MARITIMA';
+        v_tipo_correccion := 'SINCRONIZACION';
+
+        -- Determinar tipo y datos específicos
+        SELECT om.id_buque, om.porcentaje_trayecto
+        INTO v_id_buque, v_porcentaje_anterior
+        FROM shared.OperacionMaritima om
+        WHERE om.id_operacion = v_op.id_operacion;
+
+        IF FOUND THEN
+            -- Reglas para operaciones marítimas
+            IF v_porcentaje_anterior >= 100 THEN
+                SELECT id_estado_operacion INTO v_id_estado_nuevo
+                FROM shared.EstadoOperacion
+                WHERE nombre = 'Completada';
+                
+                v_correccion_aplicada := TRUE;
+                v_descripcion_correccion := 'Sincronización por trayecto completado';
+            END IF;
+        END IF;
+
+        -- Regla de cierre automático
+        IF v_op.fecha_fin IS NULL AND (NOW() - v_op.fecha_inicio) > INTERVAL '48 hours' THEN
+            v_fecha_fin_corregida := v_op.fecha_inicio + INTERVAL '72 hours';
+            
+            SELECT id_estado_operacion INTO v_id_estado_nuevo
+            FROM shared.EstadoOperacion
+            WHERE nombre = 'Completada';
+            
+            UPDATE shared.Operacion
+            SET fecha_fin = v_fecha_fin_corregida,
+                id_estado_operacion = v_id_estado_nuevo
+            WHERE id_operacion = v_op.id_operacion;
+            
+            v_correccion_aplicada := TRUE;
+            v_descripcion_correccion := 'Cierre automático por vencimiento';
+            v_tipo_correccion := 'CIERRE_AUTOMATICO';
+        END IF;
+
+        -- Calcular métricas
+        IF v_op.fecha_inicio IS NOT NULL AND v_fecha_fin_corregida IS NOT NULL THEN
+            v_duracion_horas := EXTRACT(EPOCH FROM (v_fecha_fin_corregida - v_op.fecha_inicio)) / 3600;
+        END IF;
+
+        SELECT COUNT(*) INTO v_incidencias_total
+        FROM shared.Incidencia
+        WHERE id_operacion = v_op.id_operacion;
+
+        SELECT COUNT(*) INTO v_incidencias_alta
+        FROM shared.Incidencia
+        WHERE id_operacion = v_op.id_operacion AND grado_severidad >= 4;
+
+        -- Insertar en tabla de hechos si hubo corrección
+        IF v_correccion_aplicada THEN
+            INSERT INTO gestion_maritima_audit.FactConciliacionOperacion (
+                id_operacion, id_fecha_corte,
+                id_estado_operacion_anterior, id_estado_operacion_nuevo,
+                id_buque, tipo_operacion, tipo_correccion,
+                fecha_inicio_operacion, fecha_fin_corregida,
+                duracion_real_horas,
+                incidencias_asociadas, incidencias_alta_severidad,
+                correccion_aplicada, descripcion_correccion,
+                fecha_registro_batch
+            ) VALUES (
+                v_op.id_operacion, v_id_fecha,
+                v_id_estado_anterior, v_id_estado_nuevo,
+                v_id_buque, v_tipo_operacion, v_tipo_correccion,
+                v_op.fecha_inicio, v_fecha_fin_corregida,
+                v_duracion_horas,
+                v_incidencias_total, v_incidencias_alta,
+                v_correccion_aplicada, v_descripcion_correccion,
+                NOW()
+            );
+        END IF;
+
+    END LOOP;
+
+    CLOSE cur_op;
+END;
+$$ LANGUAGE plpgsql;
+
 -- ============================================
 -- COMENTARIOS
 -- ============================================
@@ -1993,8 +2313,9 @@ COMMENT ON SCHEMA gestion_maritima IS 'Sistema de Gestión de Operaciones Marít
 COMMENT ON SCHEMA operaciones_terrestres IS 'Sistema de Gestión de Operaciones Terrestres - Módulo 4.4';
 COMMENT ON SCHEMA mantenimiento_logistico IS 'Sistema de Gestión de Mantenimiento Logístico - Módulo 4.1';
 COMMENT ON SCHEMA monitoreo IS 'Sistema de Monitoreo de Entrega - Módulo 5';
+COMMENT ON SCHEMA gestion_maritima_audit IS 'Auditoría batch de conciliación nocturna - Módulo 3 (docs 11)';
 
 -- ============================================
 -- FIN DEL SCRIPT CONSOLIDADO
--- Total de schemas: 7 (1 shared + 6 módulos)
+-- Total de schemas: 8 (1 shared + 6 módulos + 1 auditoría batch)
 -- ============================================
