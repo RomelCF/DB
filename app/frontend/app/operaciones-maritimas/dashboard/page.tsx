@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Header } from "@/components/Header";
 import { conciliacionAPI, type DashboardMetricas, type OperacionMaritima } from "@/lib/api/conciliacion";
+import { ModalDetalleOperacion } from "@/components/operaciones-maritimas/ModalDetalleOperacion";
+import { ModalCambiarEstado } from "@/components/operaciones-maritimas/ModalCambiarEstado";
 
 export default function DashboardOperacionesMaritimas() {
   const [metricas, setMetricas] = useState<DashboardMetricas | null>(null);
@@ -12,6 +14,17 @@ export default function DashboardOperacionesMaritimas() {
   const [ejecutandoBatch, setEjecutandoBatch] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+
+  // Estados para los modales
+  const [modalDetalleOpen, setModalDetalleOpen] = useState(false);
+  const [selectedOpDetalleId, setSelectedOpDetalleId] = useState<string | null>(null);
+
+  const [modalEstadoOpen, setModalEstadoOpen] = useState(false);
+  const [selectedOpEstado, setSelectedOpEstado] = useState<{
+    id: string;
+    codigo: string;
+    estado: string;
+  } | null>(null);
 
   useEffect(() => {
     cargarDatos();
@@ -50,6 +63,37 @@ export default function DashboardOperacionesMaritimas() {
       alert("Error al ejecutar el proceso de conciliación");
     } finally {
       setEjecutandoBatch(false);
+    }
+  };
+
+  const handleVerDetalle = (id: string) => {
+    setSelectedOpDetalleId(id);
+    setModalDetalleOpen(true);
+  };
+
+  const handleAbrirCambiarEstado = (id: string, codigo: string, estado: string) => {
+    setSelectedOpEstado({ id, codigo, estado });
+    setModalEstadoOpen(true);
+  };
+
+  const handleEstadoActualizado = async () => {
+    await cargarDatos();
+  };
+
+  const getEstadoBadge = (estado: string) => {
+    switch (estado?.toLowerCase()) {
+      case "en curso":
+        return "bg-sky-100 text-sky-800 border-sky-200";
+      case "completada":
+        return "bg-emerald-100 text-emerald-800 border-emerald-200";
+      case "programada":
+        return "bg-indigo-100 text-indigo-800 border-indigo-200";
+      case "en espera":
+        return "bg-amber-100 text-amber-800 border-amber-200";
+      case "cancelada":
+        return "bg-red-100 text-red-800 border-red-200";
+      default:
+        return "bg-gray-100 text-gray-800 border-gray-200";
     }
   };
 
@@ -189,6 +233,7 @@ export default function DashboardOperacionesMaritimas() {
                   <th className="px-4 py-3 text-left">Incidencias</th>
                   <th className="px-4 py-3 text-left">Fecha Inicio</th>
                   <th className="px-4 py-3 text-left">Corrección</th>
+                  <th className="px-4 py-3 text-right">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 bg-white">
@@ -202,7 +247,11 @@ export default function DashboardOperacionesMaritimas() {
                       <div className="text-xs text-gray-500">{op.matricula}</div>
                     </td>
                     <td className="px-4 py-3">
-                      <span className="inline-flex rounded-full bg-sky-100 px-2 py-1 text-xs font-medium text-sky-800">
+                      <span
+                        className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium ${getEstadoBadge(
+                          op.estado
+                        )}`}
+                      >
                         {op.estado}
                       </span>
                     </td>
@@ -247,11 +296,33 @@ export default function DashboardOperacionesMaritimas() {
                         <span className="text-xs text-gray-400">-</span>
                       )}
                     </td>
+                    <td className="px-4 py-3 text-right whitespace-nowrap">
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleVerDetalle(op.id_operacion)}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-xs font-semibold text-gray-700 shadow-sm hover:border-[#e54c2a] hover:text-[#e54c2a] transition"
+                          title="Ver Detalle Completo"
+                        >
+                          <span>👁️</span>
+                          <span>Detalle</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleAbrirCambiarEstado(op.id_operacion, op.codigo_operacion, op.estado)}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-700 shadow-sm hover:bg-sky-100 transition"
+                          title="Cambiar Estado de la Operación"
+                        >
+                          <span>🔄</span>
+                          <span>Estado</span>
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 ))}
                 {paginatedOperaciones.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
+                    <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
                       No se encontraron operaciones en los últimos 30 días
                     </td>
                   </tr>
@@ -305,6 +376,33 @@ export default function DashboardOperacionesMaritimas() {
           Última actualización: {new Date().toLocaleString('es-ES')} |
           Próxima conciliación automática: Hoy 02:00 AM
         </p>
+
+        {/* Modal de Detalle */}
+        <ModalDetalleOperacion
+          idOperacion={selectedOpDetalleId}
+          isOpen={modalDetalleOpen}
+          onClose={() => {
+            setModalDetalleOpen(false);
+            setSelectedOpDetalleId(null);
+          }}
+          onAbrirCambiarEstado={(id, codigo, estadoActual) => {
+            setModalDetalleOpen(false);
+            handleAbrirCambiarEstado(id, codigo, estadoActual);
+          }}
+        />
+
+        {/* Modal de Cambiar Estado */}
+        <ModalCambiarEstado
+          idOperacion={selectedOpEstado?.id || null}
+          codigoOperacion={selectedOpEstado?.codigo || null}
+          estadoActual={selectedOpEstado?.estado || null}
+          isOpen={modalEstadoOpen}
+          onClose={() => {
+            setModalEstadoOpen(false);
+            setSelectedOpEstado(null);
+          }}
+          onEstadoActualizado={handleEstadoActualizado}
+        />
       </main>
     </div>
   );

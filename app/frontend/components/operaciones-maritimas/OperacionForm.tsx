@@ -43,6 +43,15 @@ type OperacionFormProps = {
     };
 };
 
+type ToastType = "success" | "error" | "warning";
+
+interface Toast {
+    id: number;
+    type: ToastType;
+    title: string;
+    message: string;
+}
+
 export default function OperacionForm({ buque, searchParams }: OperacionFormProps) {
     const router = useRouter();
     const [estado, setEstado] = useState("");
@@ -50,7 +59,18 @@ export default function OperacionForm({ buque, searchParams }: OperacionFormProp
     const [fechaInicio, setFechaInicio] = useState("");
     const [fechaFin, setFechaFin] = useState("");
     const [tripulacionAsignada, setTripulacionAsignada] = useState<Tripulante[]>([]);
+    const [buqueData, setBuqueData] = useState<Buque | null>(buque);
     const [loading, setLoading] = useState(false);
+    const [showConfirmModal, setShowConfirmModal] = useState(false);
+    const [toasts, setToasts] = useState<Toast[]>([]);
+
+    const addToast = (type: ToastType, title: string, message: string) => {
+        const id = Date.now();
+        setToasts((prev) => [...prev, { id, type, title, message }]);
+        setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 5000);
+    };
+
+    const removeToast = (id: number) => setToasts((prev) => prev.filter((t) => t.id !== id));
 
     const idBuque = searchParams.id_buque;
     const routeId = searchParams.routeId;
@@ -92,9 +112,27 @@ export default function OperacionForm({ buque, searchParams }: OperacionFormProp
     useEffect(() => {
         fetch("http://localhost:3001/monitoreo/estados")
             .then((res) => res.json())
-            .then((data) => setEstadosDisponibles(data))
+            .then((data) => {
+                setEstadosDisponibles(data);
+                // Seleccionar "Programada" por defecto si existe
+                const programada = data.find((e: { nombre: string }) =>
+                    e.nombre.toLowerCase() === "programada"
+                );
+                if (programada) setEstado(programada.nombre);
+            })
             .catch((err) => console.error("Error loading estados:", err));
     }, []);
+
+    useEffect(() => {
+        if (idBuque) {
+            fetch(`http://localhost:3001/monitoreo/buques/${idBuque}`)
+                .then((res) => res.ok ? res.json() : null)
+                .then((data: Buque | null) => { if (data) setBuqueData(data); })
+                .catch((err) => console.error("Error loading buque:", err));
+        } else {
+            setBuqueData(null);
+        }
+    }, [idBuque]);
 
     useEffect(() => {
         if (tripulacionIds) {
@@ -108,18 +146,19 @@ export default function OperacionForm({ buque, searchParams }: OperacionFormProp
         }
     }, [tripulacionIds]);
 
-    const vesselNombre = buque?.nombre ?? "Sin embarcación seleccionada";
-    const vesselMatricula = buque?.matricula ?? "-";
+    const vesselNombre = buqueData?.nombre ?? "Sin embarcación seleccionada";
+    const vesselMatricula = buqueData?.matricula ?? "-";
     const vesselCapacidad =
-        typeof buque?.capacidad === "number" ? buque?.capacidad.toString() : "-";
+        typeof buqueData?.capacidad === "number" ? buqueData?.capacidad.toString() : "-";
     const vesselPeso =
-        buque?.peso !== undefined && buque?.peso !== null
-            ? buque.peso.toString()
+        buqueData?.peso !== undefined && buqueData?.peso !== null
+            ? buqueData.peso.toString()
             : "-";
-    const vesselUbicacion = buque?.ubicacion_actual ?? "-";
+    const vesselUbicacion = buqueData?.ubicacion_actual ?? "-";
 
     const isFormValid =
         idBuque &&
+        buqueData &&
         routeId &&
         contenedoresSeleccionados &&
         tripulacionIds &&
@@ -128,8 +167,8 @@ export default function OperacionForm({ buque, searchParams }: OperacionFormProp
         fechaInicio;
 
 
-    const handleIniciarOperacion = async () => {
-        if (!confirm("¿Está seguro de que desea iniciar la operación?")) return;
+    const ejecutarInicioOperacion = async () => {
+        setShowConfirmModal(false);
 
         setLoading(true);
         try {
@@ -175,7 +214,7 @@ export default function OperacionForm({ buque, searchParams }: OperacionFormProp
             }
 
             if (!idMuelleOrigen || !idMuelleDestino) {
-                alert("No se encontraron los muelles seleccionados. Por favor, verifique la ruta y los muelles asignados.");
+                addToast("warning", "Muelles no encontrados", "No se encontraron los muelles seleccionados. Verifique la ruta y los muelles asignados.");
                 setLoading(false);
                 return;
             }
@@ -205,23 +244,86 @@ export default function OperacionForm({ buque, searchParams }: OperacionFormProp
             });
 
             if (response.ok) {
-                alert("Operación iniciada con éxito");
-                router.push("/operaciones-maritimas");
+                addToast("success", "¡Operación creada!", "La operación marítima fue iniciada con éxito.");
+                setTimeout(() => router.push("/operaciones-maritimas"), 1800);
             } else {
                 const errorData = await response.json();
-                alert(`Error al iniciar operación: ${errorData.message || "Error desconocido"}`);
+                addToast("error", "Error al crear operación", errorData.message || "Error desconocido");
             }
         } catch (error) {
             console.error("Error:", error);
-            alert("Error de conexión");
+            addToast("error", "Error de conexión", "No se pudo conectar con el servidor.");
         } finally {
             setLoading(false);
         }
     };
 
+    const handleIniciarOperacion = () => setShowConfirmModal(true);
+
     return (
         <div className="flex min-h-screen flex-col bg-[#f5f7f8] text-gray-900 dark:bg-[#0f1923] dark:text-gray-100">
             <Header />
+
+            {/* ── Toasts ── */}
+            <div className="fixed top-5 right-5 z-[9999] flex flex-col gap-3 w-80">
+                {toasts.map((toast) => {
+                    const styles = {
+                        success: { bar: "bg-emerald-500", icon: "check_circle", iconColor: "text-emerald-500", bg: "bg-white dark:bg-slate-800 border-emerald-200 dark:border-emerald-700" },
+                        error:   { bar: "bg-red-500",     icon: "cancel",       iconColor: "text-red-500",     bg: "bg-white dark:bg-slate-800 border-red-200 dark:border-red-700"     },
+                        warning: { bar: "bg-amber-500",   icon: "warning",      iconColor: "text-amber-500",   bg: "bg-white dark:bg-slate-800 border-amber-200 dark:border-amber-700" },
+                    }[toast.type];
+                    return (
+                        <div key={toast.id} className={`relative flex items-start gap-3 rounded-xl border shadow-xl p-4 pr-10 overflow-hidden animate-[slideIn_0.3s_ease-out] ${styles.bg}`}>
+                            <div className={`absolute left-0 top-0 bottom-0 w-1 ${styles.bar} rounded-l-xl`} />
+                            <span className={`material-symbols-outlined text-2xl mt-0.5 ${styles.iconColor}`}>{styles.icon}</span>
+                            <div className="flex-1 min-w-0">
+                                <p className="font-semibold text-sm text-gray-900 dark:text-white">{toast.title}</p>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 leading-relaxed">{toast.message}</p>
+                            </div>
+                            <button onClick={() => removeToast(toast.id)} className="absolute top-3 right-3 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
+                                <span className="material-symbols-outlined text-lg">close</span>
+                            </button>
+                        </div>
+                    );
+                })}
+            </div>
+
+            {/* ── Modal de Confirmación ── */}
+            {showConfirmModal && (
+                <div className="fixed inset-0 z-[9998] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowConfirmModal(false)} />
+                    <div className="relative bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md p-6 border border-gray-200 dark:border-slate-700 animate-[scaleIn_0.2s_ease-out]">
+                        <div className="flex items-center gap-4 mb-4">
+                            <div className="h-12 w-12 rounded-full bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center flex-shrink-0">
+                                <span className="material-symbols-outlined text-[#0459af] text-2xl">directions_boat</span>
+                            </div>
+                            <div>
+                                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Confirmar operación</h3>
+                                <p className="text-sm text-gray-500 dark:text-gray-400">Esta acción no se puede deshacer</p>
+                            </div>
+                        </div>
+                        <p className="text-sm text-gray-700 dark:text-gray-300 mb-6 leading-relaxed">
+                            ¿Está seguro de que desea iniciar la operación marítima? Se registrarán todos los datos configurados.
+                        </p>
+                        <div className="flex gap-3 justify-end">
+                            <button
+                                onClick={() => setShowConfirmModal(false)}
+                                className="px-5 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-slate-700 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={ejecutarInicioOperacion}
+                                className="flex items-center gap-2 px-5 py-2 text-sm font-bold text-white bg-[#0459af] rounded-lg hover:bg-[#0459af]/90 transition-colors"
+                            >
+                                <span className="material-symbols-outlined text-lg">play_arrow</span>
+                                Iniciar Operación
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <main className="flex-1 p-4 md:p-8 lg:p-10 overflow-y-auto">
                 <div className="max-w-7xl mx-auto">
                     <header className="mb-8">
@@ -355,18 +457,13 @@ export default function OperacionForm({ buque, searchParams }: OperacionFormProp
                                         <label className="block text-sm font-medium mb-2">
                                             Estado
                                         </label>
-                                        <select
-                                            value={estado}
-                                            onChange={(e) => setEstado(e.target.value)}
-                                            className="block w-full rounded-lg bg-[#f5f7f8] dark:bg-slate-700 border-gray-200 dark:border-slate-700 shadow-sm focus:border-[#0459af] focus:ring focus:ring-[#0459af] focus:ring-opacity-50 text-sm py-2.5 px-4"
-                                        >
-                                            <option value="">Seleccione estado</option>
-                                            {estadosDisponibles.map((est) => (
-                                                <option key={est.id_estado_operacion} value={est.nombre}>
-                                                    {est.nombre}
-                                                </option>
-                                            ))}
-                                        </select>
+                                        <div className="flex items-center gap-3 px-4 py-2.5 rounded-lg bg-gray-100 dark:bg-slate-700">
+                                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+                                                <span className="h-1.5 w-1.5 rounded-full bg-blue-500 inline-block" />
+                                                Programada
+                                            </span>
+                                            <span className="text-xs text-gray-400 dark:text-gray-500">El estado inicial siempre es Programada</span>
+                                        </div>
                                     </div>
 
                                     <div>
