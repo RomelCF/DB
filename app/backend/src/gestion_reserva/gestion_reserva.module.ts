@@ -26,7 +26,6 @@ import { AgentesController } from './controllers/agentes.controller';
 import { TarifasController } from './controllers/tarifas.controller';
 import { BuquesOperacionesController } from './controllers/buques-operaciones.controller';
 import { EstadosReservaController } from './controllers/estados-reserva.controller';
-import { AuthReservasController } from './controllers/auth-reservas.controller';
 
 // Services
 import { ClientesService } from './services/clientes.service';
@@ -35,7 +34,6 @@ import { AgentesService } from './services/agentes.service';
 import { TarifasService } from './services/tarifas.service';
 import { BuquesOperacionesService } from './services/buques-operaciones.service';
 import { EstadosReservaService } from './services/estados-reserva.service';
-import { AuthReservasService } from './services/auth-reservas.service';
 
 @Module({
   imports: [
@@ -63,7 +61,6 @@ import { AuthReservasService } from './services/auth-reservas.service';
     TarifasController,
     BuquesOperacionesController,
     EstadosReservaController,
-    AuthReservasController,
   ],
   providers: [
     ClientesService,
@@ -72,7 +69,6 @@ import { AuthReservasService } from './services/auth-reservas.service';
     TarifasService,
     BuquesOperacionesService,
     EstadosReservaService,
-    AuthReservasService,
   ],
   exports: [
     ClientesService,

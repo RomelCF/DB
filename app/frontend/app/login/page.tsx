@@ -43,15 +43,15 @@ export default function LoginPage() {
             </div>
             <div>
               <p className="text-sm uppercase tracking-wide text-white/80">Hapag-Lloyd</p>
-              <p className="text-xs text-white/70">Módulo de Monitoreo</p>
+              <p className="text-xs text-white/70">Sistema Integrado</p>
             </div>
           </div>
 
           <h2 className="text-5xl font-bold leading-tight mb-6">
-            Monitoreo de Operaciones
+            Gestión Integral de Operaciones
           </h2>
           <p className="text-lg opacity-90 max-w-xl">
-            Panel especializado para el seguimiento y control de operaciones en tiempo real.
+            Plataforma unificada para el seguimiento y control de las operaciones marítimas, portuarias, de reservas y de monitoreo.
           </p>
 
           <div className="mt-16 space-y-8 max-w-xl">
@@ -73,7 +73,7 @@ export default function LoginPage() {
               <span className="material-symbols-outlined text-3xl opacity-90 mt-1">security</span>
               <div>
                 <h3 className="font-bold text-lg">Acceso Seguro</h3>
-                <p className="opacity-85 text-sm">Protección de la información crítica asociada al monitoreo de la operación.</p>
+                <p className="opacity-85 text-sm">Un solo inicio de sesión para todos los módulos del sistema.</p>
               </div>
             </div>
           </div>
@@ -91,7 +91,7 @@ export default function LoginPage() {
           <div className="text-center lg:text-left mb-10">
             <h2 className="text-3xl font-bold text-gray-900">Bienvenido</h2>
             <p className="text-gray-600 mt-2">
-              Ingresa tus credenciales para acceder al módulo de Monitoreo.
+              Ingresa tus credenciales para acceder al sistema.
             </p>
           </div>
 
@@ -176,21 +176,7 @@ export default function LoginPage() {
               <span className="material-symbols-outlined text-blue-500 mr-3 mt-1">info</span>
               <div>
                 <p className="text-sm text-blue-700">
-                  Este módulo de monitoreo es para uso exclusivo del personal autorizado y registrado de Hapag-Lloyd.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Nota específica para el equipo sobre instancias de empleado */}
-          <div className="mt-4 rounded-md border border-amber-300 bg-amber-50 p-4">
-            <div className="flex gap-2">
-              <span className="material-symbols-outlined text-amber-600">warning</span>
-              <div>
-                <p className="text-sm font-semibold text-amber-900">Nota para el equipo de desarrollo</p>
-                <p className="mt-1 text-xs text-amber-800">
-                  Recuerden subir / registrar en la base de datos las instancias de <strong>Empleado</strong> que
-                  tengan definidas para las pruebas de autenticación y perfil de operador.
+                  Este sistema es para uso exclusivo del personal autorizado y registrado de Hapag-Lloyd.
                 </p>
               </div>
             </div>

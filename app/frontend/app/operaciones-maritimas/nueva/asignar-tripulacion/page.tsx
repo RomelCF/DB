@@ -73,6 +73,8 @@ function AsignarTripulacionContent() {
   }, [idBuque]);
 
   const [seleccionados, setSeleccionados] = useState<Set<string>>(new Set());
+  const [paginaActual, setPaginaActual] = useState(1);
+  const ELEMENTOS_POR_PAGINA = 10;
 
   if (loading) {
     return (
@@ -108,6 +110,18 @@ function AsignarTripulacionContent() {
       nuevosSeleccionados.add(id);
     }
     setSeleccionados(nuevosSeleccionados);
+  };
+
+  // Paginación
+  const totalPaginas = Math.ceil(tripulantes.length / ELEMENTOS_POR_PAGINA);
+  const indiceInicio = (paginaActual - 1) * ELEMENTOS_POR_PAGINA;
+  const indiceFin = indiceInicio + ELEMENTOS_POR_PAGINA;
+  const tripulantesPagina = tripulantes.slice(indiceInicio, indiceFin);
+
+  const irAPagina = (pagina: number) => {
+    if (pagina >= 1 && pagina <= totalPaginas) {
+      setPaginaActual(pagina);
+    }
   };
 
   // Restaura el comportamiento original: pasar IDs por query param y volver a /operaciones-maritimas/nueva
@@ -173,7 +187,7 @@ function AsignarTripulacionContent() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 dark:divide-slate-700">
-                  {tripulantes.map((tripulante) => (
+                  {tripulantesPagina.map((tripulante) => (
                     <tr
                       key={tripulante.id_tripulante}
                       className={`hover:bg-gray-50 dark:hover:bg-slate-700 ${seleccionados.has(tripulante.id_tripulante) ? 'bg-blue-50 dark:bg-blue-900/30' : ''
@@ -210,6 +224,77 @@ function AsignarTripulacionContent() {
               </table>
             )}
           </div>
+
+          {/* Paginación */}
+          {totalPaginas > 1 && (
+            <div className="mt-4 flex items-center justify-between">
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Mostrando {indiceInicio + 1}–{Math.min(indiceFin, tripulantes.length)} de {tripulantes.length} tripulantes
+                {seleccionados.size > 0 && (
+                  <span className="ml-2 text-blue-600 dark:text-blue-400">
+                    · {seleccionados.size} seleccionado{seleccionados.size !== 1 ? 's' : ''}
+                  </span>
+                )}
+              </p>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => irAPagina(1)}
+                  disabled={paginaActual === 1}
+                  className="px-2 py-1 rounded text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  aria-label="Primera página"
+                >
+                  «
+                </button>
+                <button
+                  onClick={() => irAPagina(paginaActual - 1)}
+                  disabled={paginaActual === 1}
+                  className="px-2 py-1 rounded text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  aria-label="Página anterior"
+                >
+                  ‹
+                </button>
+                {Array.from({ length: totalPaginas }, (_, i) => i + 1)
+                  .filter(p => p === 1 || p === totalPaginas || Math.abs(p - paginaActual) <= 2)
+                  .reduce<(number | '...')[]>((acc, p, idx, arr) => {
+                    if (idx > 0 && (p as number) - (arr[idx - 1] as number) > 1) acc.push('...');
+                    acc.push(p);
+                    return acc;
+                  }, [])
+                  .map((item, idx) =>
+                    item === '...' ? (
+                      <span key={`ellipsis-${idx}`} className="px-2 py-1 text-sm text-gray-400">…</span>
+                    ) : (
+                      <button
+                        key={item}
+                        onClick={() => irAPagina(item as number)}
+                        className={`px-3 py-1 rounded text-sm font-medium transition-colors ${paginaActual === item
+                            ? 'bg-blue-600 text-white'
+                            : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700'
+                          }`}
+                      >
+                        {item}
+                      </button>
+                    )
+                  )}
+                <button
+                  onClick={() => irAPagina(paginaActual + 1)}
+                  disabled={paginaActual === totalPaginas}
+                  className="px-2 py-1 rounded text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  aria-label="Página siguiente"
+                >
+                  ›
+                </button>
+                <button
+                  onClick={() => irAPagina(totalPaginas)}
+                  disabled={paginaActual === totalPaginas}
+                  className="px-2 py-1 rounded text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  aria-label="Última página"
+                >
+                  »
+                </button>
+              </div>
+            </div>
+          )}
 
           <div className="mt-6 flex justify-end">
             <button

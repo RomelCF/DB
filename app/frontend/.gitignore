@@ -39,3 +39,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# re-incluir helpers de API (la raíz ignora lib/)
+!lib/
+lib/*
+!lib/api/

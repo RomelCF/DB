@@ -6,23 +6,37 @@ import Link from "next/link";
 import { Header } from "@/components/Header";
 import { operacionesAPI, OperacionMaritima, PaginatedResponse } from "@/lib/api/operaciones-maritimas";
 
-type OperationStatus = "Completado" | "En curso" | "Pendiente" | "Desconocido";
+type OperationStatus =
+  | "Completada"
+  | "En Curso"
+  | "Programada"
+  | "Cancelada"
+  | "En Espera"
+  | "Desconocido";
 
 const statusBadgeStyles: Record<
   OperationStatus,
   { light: string; dark: string }
 > = {
-  Completado: {
+  Completada: {
     light: "bg-[#d1fae5] text-[#065f46]",
     dark: "dark:bg-[#064e3b] dark:text-[#a7f3d0]",
   },
-  "En curso": {
+  "En Curso": {
     light: "bg-[#fef3c7] text-[#92400e]",
     dark: "dark:bg-[#92400e] dark:text-[#fde68a]",
   },
-  Pendiente: {
+  Programada: {
+    light: "bg-[#dbeafe] text-[#1e40af]",
+    dark: "dark:bg-[#1e3a8a] dark:text-[#bfdbfe]",
+  },
+  Cancelada: {
     light: "bg-[#fee2e2] text-[#991b1b]",
     dark: "dark:bg-[#991b1b] dark:text-[#fecaca]",
+  },
+  "En Espera": {
+    light: "bg-[#f3f4f6] text-[#6b7280]",
+    dark: "dark:bg-[#374151] dark:text-[#d1d5db]",
   },
   Desconocido: {
     light: "bg-[#f3f4f6] text-[#6b7280]",

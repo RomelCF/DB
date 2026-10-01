@@ -5,7 +5,13 @@ from datetime import datetime, timedelta
 import uuid
 import os
 
-BASE_NOW = datetime(2025, 11, 23, 12, 0, 0)
+# Fecha base: dinámica (ahora) para que los datos generados caigan dentro
+# de las ventanas que consulta la aplicación (últimos 30/60/120 días).
+# Se puede fijar una fecha concreta con la variable de entorno BASE_NOW.
+BASE_NOW = datetime.now()
+_env_base = os.getenv('BASE_NOW')
+if _env_base:
+    BASE_NOW = datetime.fromisoformat(_env_base)
 
 fake = Faker('es_ES')
 OUTPUT_DIR = 'datos_csv_consolidado'
@@ -688,6 +694,23 @@ class GeneradorCSVConsolidado:
             ['id_tipo_notificacion', 'nombre']
         )
     
+    def generar_estado_lectura(self):
+        print("\nGenerando EstadoLectura...")
+        estados = ['Normal', 'Alerta', 'Critica', 'Sin Señal', 'Calibrando']
+        datos = []
+        self.ids['estado_lectura'] = []
+        
+        for estado in estados:
+            id_estado = str(uuid.uuid4())
+            self.ids['estado_lectura'].append(id_estado)
+            datos.append([id_estado, estado])
+        
+        return self.guardar_csv(
+            '37a_estado_lectura.csv',
+            datos,
+            ['id_estado_lectura', 'nombre']
+        )
+    
     # ============================================
     # TABLAS PRINCIPALES SHARED
     # ============================================
@@ -790,17 +813,24 @@ class GeneradorCSVConsolidado:
         self.ids['usuario'] = []
         correos_usados = set()
         
-        for id_empleado in self.ids['empleado']:
+        for idx, id_empleado in enumerate(self.ids['empleado']):
             id_usuario = str(uuid.uuid4())
             
-            while True:
-                correo = fake.email()
-                if correo not in correos_usados:
-                    correos_usados.add(correo)
-                    break
-            
-            contrasena = fake.password(length=12)
-            id_rol = random.choice(self.ids['rol_usuario'])
+            if idx == 0:
+                # Usuario demo: Administrador + Operador -> acceso a todos los módulos
+                correo = 'admin@demo.com'
+                contrasena = 'Admin123!'
+                id_rol = self.ids['rol_usuario'][0]  # Administrador
+                correos_usados.add(correo)
+            else:
+                while True:
+                    correo = fake.email()
+                    if correo not in correos_usados:
+                        correos_usados.add(correo)
+                        break
+                
+                contrasena = fake.password(length=12)
+                id_rol = random.choice(self.ids['rol_usuario'])
             
             self.ids['usuario'].append(id_usuario)
             datos.append([
@@ -2935,6 +2965,9 @@ class GeneradorCSVConsolidado:
             empleados_disponibles, 
             min(20, len(empleados_disponibles))
         )
+        # Garantizar que el empleado del usuario demo sea operador (acceso a monitoreo)
+        if self.ids['empleado'][0] not in empleados_operadores:
+            empleados_operadores.insert(0, self.ids['empleado'][0])
         
         for id_empleado in empleados_operadores:
             id_operador = str(uuid.uuid4())
@@ -2981,6 +3014,7 @@ class GeneradorCSVConsolidado:
         print(f"\nGenerando Sensores...")
         datos = []
         self.ids['sensor'] = []
+        self.ids['sensor_tipo'] = {}
         codigos_usados = set()
         
         nombres_sensores = [
@@ -3013,6 +3047,7 @@ class GeneradorCSVConsolidado:
                 id_rol = random.choice(self.ids['rol_sensor'])
                 
                 self.ids['sensor'].append(id_sensor)
+                self.ids['sensor_tipo'][id_sensor] = id_tipo
                 datos.append([
                     id_sensor, codigo, nombre, id_tipo, id_rol, id_contenedor
                 ])
@@ -3022,6 +3057,59 @@ class GeneradorCSVConsolidado:
             datos,
             ['id_sensor', 'codigo', 'nombre', 'id_tipo_sensor',
              'id_rol_sensor', 'id_contenedor']
+        )
+    
+    def _unidad_y_rango_por_tipo_sensor(self, id_tipo_sensor):
+        """Devuelve (unidad, min, max) según el tipo de sensor."""
+        try:
+            indice = self.ids['tipo_sensor'].index(id_tipo_sensor)
+        except ValueError:
+            indice = 0
+        rangos = [
+            ('°', -90.0, 90.0),      # GPS -> coordenadas
+            ('°C', 10.0, 35.0),      # Temperatura
+            ('%', 30.0, 90.0),       # Humedad
+            ('hPa', 980.0, 1040.0),  # Presion
+            ('m/s²', 0.0, 9.81),     # Acelerometro
+            ('°/s', -90.0, 90.0),    # Giroscopio
+            ('unid', 1.0, 100.0),    # RFID
+        ]
+        unidad, lo, hi = rangos[indice % len(rangos)]
+        return unidad, lo, hi
+    
+    def generar_lecturas_sensor(self):
+        print(f"\nGenerando Lecturas de Sensores...")
+        datos = []
+        # Estado ponderado: mayormente lecturas normales
+        pesos_estado = [80, 10, 5, 3, 2]  # Normal, Alerta, Critica, Sin Señal, Calibrando
+        
+        for id_sensor in self.ids['sensor']:
+            num_lecturas = random.randint(20, 100)
+            paso_minutos = random.randint(10, 90)
+            # La lectura más reciente cae dentro de las últimas 24h
+            t_fin = fecha_hora_entre(BASE_NOW, dias_desde=-1, dias_hasta=0)
+            unidad, lo, hi = self._unidad_y_rango_por_tipo_sensor(
+                self.ids['sensor_tipo'][id_sensor]
+            )
+            
+            for i in range(num_lecturas):
+                id_lectura = str(uuid.uuid4())
+                # Serie ascendente: la primera es la más antigua
+                fecha_hora = t_fin - timedelta(minutes=paso_minutos * (num_lecturas - i))
+                valor = round(random.uniform(lo, hi), 2)
+                id_estado = random.choices(self.ids['estado_lectura'], weights=pesos_estado, k=1)[0]
+                
+                datos.append([
+                    id_lectura, id_sensor,
+                    fecha_hora.strftime('%Y-%m-%d %H:%M:%S'),
+                    valor, unidad, id_estado
+                ])
+        
+        return self.guardar_csv(
+            '105a_lectura_sensor.csv',
+            datos,
+            ['id_lectura_sensor', 'id_sensor', 'fecha_hora',
+             'valor', 'unidad', 'id_estado_lectura']
         )
     
     def generar_reportes(self, cantidad=80):
@@ -3558,6 +3646,7 @@ class GeneradorCSVConsolidado:
         self.generar_tipo_sensor()
         self.generar_rol_sensor()
         self.generar_tipo_notificacion()
+        self.generar_estado_lectura()
         
         # ============================================
         # TABLAS PRINCIPALES SHARED (38-56)
@@ -3661,6 +3750,7 @@ class GeneradorCSVConsolidado:
         self.generar_operadores()
         self.generar_operaciones_monitoreo()
         self.generar_sensores()
+        self.generar_lecturas_sensor()
         self.generar_reportes(80)
         self.generar_notificaciones()
         self.generar_importadores(40)
@@ -3681,7 +3771,7 @@ class GeneradorCSVConsolidado:
         print("\n" + "="*70)
         print("GENERACION COMPLETADA")
         print(f"Archivos guardados en: {OUTPUT_DIR}/")
-        print(f"Total de archivos generados: 121")
+        print(f"Total de archivos generados: 123")
         print("="*70)
 
 

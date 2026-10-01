@@ -107,30 +107,7 @@ Cada README de frontend describe:
 
 ---
 
-## 4. Cambios respecto al prototipo (para completar por el grupo)
-
-En esta sección el grupo debe documentar **diferencias entre el prototipo inicial y la implementación final**, por ejemplo:
-
-- Funcionalidades/pantallas que se consolidaron o simplificaron.
-- Casos de uso que quedaron fuera de alcance de esta versión.
-- Regla de negocio que se cambiaron respecto al diseño original.
-
-Sugerencia de estructura:
-
-- **Módulo Gestión de Reservas**
-  - Cambios frente al prototipo...
-- **Módulo Operaciones Marítimas**
-  - Cambios frente al prototipo...
-- **Módulo Monitoreo**
-  - Cambios frente al prototipo...
-- **Otros módulos**
-  - Cambios frente al prototipo...
-
-> Aquí el grupo debe completar el contenido concreto según su diseño inicial y la implementación final.
-
----
-
-## 5. Datos del equipo
+## 4. Datos del equipo
 
 - Curso: Diseño de Bases de Datos
 - Grupo: 5
@@ -143,24 +120,96 @@ Sugerencia de estructura:
 
 ---
 
-## 6. Ejecución básica del proyecto
+## 5. Ejecución básica del proyecto
 
-### 6.1. Backend
+El proyecto usa **pnpm workspaces** (monorepo en la raíz de `app/`). Todos los comandos se ejecutan desde la carpeta `app/`.
 
-Desde la carpeta `backend/`:
-
-```bash
-npm install
-npm run start:dev
-```
-
-### 6.2. Frontend
-
-Desde la carpeta `frontend/`:
+### 5.1. Instalación de dependencias
 
 ```bash
-npm install
-npm run dev
+pnpm install
 ```
 
-Por defecto el frontend se expone en `http://localhost:3000` y el backend en `http://localhost:3001` (ajustar según configuración real).
+### 5.2. Ejecución en desarrollo
+
+Backend (puerto 3001):
+
+```bash
+pnpm dev:backend
+```
+
+Frontend (puerto 3000):
+
+```bash
+pnpm dev:frontend
+```
+
+O ambos a la vez:
+
+```bash
+pnpm dev
+```
+
+Por defecto el frontend se expone en `http://localhost:3000` y el backend en `http://localhost:3001`.
+
+### 5.3. Docker Compose (recomendado)
+
+Levanta PostgreSQL + backend + frontend en contenedores:
+
+```bash
+cp .env.example .env   # opcional: ajustar credenciales
+docker compose up -d --build
+```
+
+- Frontend: `http://localhost:3000`
+- Backend: `http://localhost:3001`
+- PostgreSQL: solo accesible desde la red interna (`db:5432`)
+
+La base de datos se inicializa automáticamente con el **esquema** (`scripts/ddl/tablas/consolidado.sql`), que incluye los 8 schemas: `shared`, los 6 módulos y `gestion_maritima_audit` (auditoría batch de conciliación).
+
+**Datos de prueba (seed automatizado):**
+
+```bash
+./scripts/poblamiento_datos/seed.sh          # genera CSVs (Python+Faker) y los carga con psql \copy
+./scripts/poblamiento_datos/seed.sh --ddl    # igual, pero primero recrea el esquema (DESTRUCTIVO)
+```
+
+- El generador `consolidado.py` produce 123 CSVs con **UUIDs** (compatible con el DDL) y fechas relativas a la fecha actual.
+- El loader `consolidado.sql` usa `\copy` (cliente) y el placeholder `:csvdir`, que `seed.sh` resuelve automáticamente.
+- Destino: usa `DATABASE_URL` si está definida; si no, carga en el contenedor `db` del docker-compose (red `app_default`).
+- Requisito: `python3` con `venv` y Docker (o psql local).
+
+**Credenciales de prueba** (texto plano, modo desarrollo):
+
+| Usuario | Contraseña | Acceso |
+|---|---|---|
+| `admin@demo.com` | `Admin123!` | Todos los módulos (Administrador + Operador) |
+
+Los demás usuarios generados tienen contraseñas aleatorias legibles en `shared.Usuario`. El login es unificado (`POST /auth/login`) y el acceso a cada módulo se calcula por rol: **monitoreo** (ser operador), **reservas** (rol Admin/Supervisor/Operador/Coordinador/Consultor/Auditor), **marítimo** (no Agente/Cliente/Trabajador Portuario), **portuario** (no Agente/Cliente).
+
+Comandos útiles:
+
+```bash
+docker compose logs -f backend   # logs del backend
+docker compose down              # detener servicios
+docker compose down -v           # detener y borrar datos de la BD (se vuelve a sembrar con seed.sh)
+```
+
+> ⚠️ Los scripts antiguos `scripts/dml/datos-iniciales/` usan IDs enteros y son **incompatibles** con el esquema UUID actual. Usar el pipeline `consolidado.py` + `consolidado.sql` + `seed.sh`.
+
+### 5.4. Build de producción
+
+```bash
+pnpm build      # compila backend y frontend
+pnpm test       # tests del backend
+```
+
+### 5.5. Deploy en producción
+
+Para desplegar en **Vercel + Render + Supabase** (incluido el seed automatizado con GitHub Actions), ver [`DEPLOY.md`](../DEPLOY.md).
+
+---
+
+## Deuda técnica / pendiente (próxima iteración)
+
+- **Contraseñas en texto plano**: el login y el seed usan contraseñas en texto plano (modo desarrollo). Migrar a `bcrypt` (hash en `generar_usuarios` + `bcrypt.compare` en `AuthService`) antes de producción.

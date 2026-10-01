@@ -190,8 +190,8 @@ export default function SensorDetallePage() {
                       />
                       <YAxis style={{ fontSize: "12px" }} />
                       <Tooltip
-                        labelFormatter={(value) => new Date(value).toLocaleString("es-ES")}
-                        formatter={(value: number) => [`${value} ${sensor.ultima_lectura?.unidad || ""}`, "Valor"]}
+                        labelFormatter={(value) => new Date(String(value)).toLocaleString("es-ES")}
+                        formatter={(value) => [`${String(value)} ${sensor.ultima_lectura?.unidad || ""}`, "Valor"]}
                       />
                       <Line
                         type="monotone"

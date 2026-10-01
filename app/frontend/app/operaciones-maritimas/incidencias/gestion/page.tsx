@@ -7,6 +7,7 @@ import {
   type OperacionConIncidencias,
 } from "@/lib/api/operaciones-incidencias";
 import { useAuth } from "@/context/AuthContext";
+import { API_URL } from "@/lib/api/client";
 
 export default function GestionIncidenciasOperacionesPage() {
   const { usuario } = useAuth();
@@ -119,7 +120,7 @@ export default function GestionIncidenciasOperacionesPage() {
 
     try {
       const response = await fetch(
-        "http://localhost:3001/gestion-maritima/operaciones-incidencias/marcar-investigacion",
+        `${API_URL}/gestion-maritima/operaciones-incidencias/marcar-investigacion`,
         {
           method: "POST",
           headers: {

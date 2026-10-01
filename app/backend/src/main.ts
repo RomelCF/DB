@@ -6,8 +6,13 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   
   // Habilitar CORS para el frontend
+  const corsOrigins = (process.env.CORS_ORIGINS || 'http://localhost:3000,https://bd252-grupo5-app.vercel.app')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
   app.enableCors({
-    origin: ['http://localhost:3000', 'https://bd252-grupo5-app.vercel.app'],
+    origin: corsOrigins,
     credentials: true,
   });
   

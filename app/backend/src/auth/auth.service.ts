@@ -26,38 +26,50 @@ export class AuthService {
     private jwtService: JwtService,
   ) { }
 
-  // Login simplificado - Solo para operadores de monitoreo
+  // Login unificado para todos los módulos
+  // Las credenciales se validan en texto plano (desarrollo).
+  // TODO: Para producción, usar bcrypt.
   async login(loginDto: LoginDto) {
     const { correo_electronico, contrasena } = loginDto;
 
     // Buscar usuario con sus relaciones
     const usuario = await this.usuarioRepository.findOne({
       where: { correo_electronico },
-      relations: ['empleado'],
+      relations: ['rol_usuario', 'empleado'],
     });
 
     if (!usuario) {
       throw new UnauthorizedException('Credenciales inválidas');
     }
 
-    // Verificar contraseña (temporalmente sin bcrypt - contraseñas en texto plano)
-    // TODO: Para producción, usar bcrypt
-    const isPasswordValid = contrasena === usuario.contrasena;
-    // const isPasswordValid = await bcrypt.compare(contrasena, usuario.contrasena); // Descomentar para producción
-    if (!isPasswordValid) {
+    // Verificar contraseña (texto plano por ahora)
+    if (contrasena !== usuario.contrasena) {
       throw new UnauthorizedException('Credenciales inválidas');
     }
 
-    // Verificar que el empleado sea un operador de monitoreo
+    const rol = usuario.rol_usuario?.nombre;
     const operador = await this.operadorRepository.findOne({
       where: { id_empleado: usuario.id_empleado },
       relations: ['empleado'],
     });
 
-    if (!operador) {
-      throw new UnauthorizedException(
-        'Solo los operadores de monitoreo tienen acceso al sistema'
-      );
+    // Calcular módulos a los que el usuario tiene acceso
+    const modulos: string[] = [];
+    if (operador) {
+      modulos.push('monitoreo');
+    }
+    if (rol && ['Administrador', 'Supervisor', 'Operador', 'Coordinador', 'Consultor', 'Auditor'].includes(rol)) {
+      modulos.push('reservas');
+    }
+    if (rol && !['Agente de Reservas', 'Cliente', 'Trabajador Portuario'].includes(rol)) {
+      modulos.push('maritimo');
+    }
+    if (rol && !['Agente de Reservas', 'Cliente'].includes(rol)) {
+      modulos.push('portuario');
+    }
+
+    if (modulos.length === 0) {
+      throw new UnauthorizedException('No tiene acceso a ningún módulo');
     }
 
     // Generar JWT
@@ -65,9 +77,8 @@ export class AuthService {
       sub: usuario.id_usuario,
       correo: usuario.correo_electronico,
       id_empleado: usuario.id_empleado,
-      id_operador: operador.id_operador,
-      turno: operador.turno,
-      zona_monitoreo: operador.zona_monitoreo,
+      rol,
+      modulos,
     };
 
     const token = this.jwtService.sign(payload);
@@ -77,17 +88,19 @@ export class AuthService {
       usuario: {
         id_usuario: usuario.id_usuario,
         correo_electronico: usuario.correo_electronico,
-        empleado: {
+        empleado: usuario.empleado ? {
           nombre: usuario.empleado.nombre,
           apellido: usuario.empleado.apellido,
           codigo: usuario.empleado.codigo,
-        },
-        operador: {
+        } : null,
+        rol,
+        operador: operador ? {
           id_operador: operador.id_operador,
           turno: operador.turno,
           zona_monitoreo: operador.zona_monitoreo,
-        },
+        } : null,
       },
+      modulos,
     };
   }
 
@@ -228,7 +241,7 @@ export class AuthService {
   async getProfile(id_usuario: string) {
     const usuario = await this.usuarioRepository.findOne({
       where: { id_usuario },
-      relations: ['empleado'],
+      relations: ['rol_usuario', 'empleado'],
     });
 
     if (!usuario) {
@@ -243,9 +256,26 @@ export class AuthService {
       where: { id_empleado: usuario.id_empleado },
     });
 
+    const rol = usuario.rol_usuario?.nombre;
+    const modulos: string[] = [];
+    if (operador) {
+      modulos.push('monitoreo');
+    }
+    if (rol && ['Administrador', 'Supervisor', 'Operador', 'Coordinador', 'Consultor', 'Auditor'].includes(rol)) {
+      modulos.push('reservas');
+    }
+    if (rol && !['Agente de Reservas', 'Cliente', 'Trabajador Portuario'].includes(rol)) {
+      modulos.push('maritimo');
+    }
+    if (rol && !['Agente de Reservas', 'Cliente'].includes(rol)) {
+      modulos.push('portuario');
+    }
+
     return {
       id_usuario: usuario.id_usuario,
       correo_electronico: usuario.correo_electronico,
+      rol,
+      modulos,
       empleado: {
         id_empleado: usuario.empleado.id_empleado,
         nombre: usuario.empleado.nombre,
